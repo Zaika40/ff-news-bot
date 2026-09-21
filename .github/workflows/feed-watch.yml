@@ -21,6 +21,9 @@ jobs:
 
       - name: Check the feeds
         env:
+          # One channel for both feeds: set DISCORD_NEWS_WEBHOOK only.
+          # Separate channels: set the two below instead, they win.
+          DISCORD_NEWS_WEBHOOK: ${{ secrets.DISCORD_NEWS_WEBHOOK }}
           DISCORD_TRUMP_WEBHOOK: ${{ secrets.DISCORD_TRUMP_WEBHOOK }}
           DISCORD_HEADLINES_WEBHOOK: ${{ secrets.DISCORD_HEADLINES_WEBHOOK }}
           MAX_PER_RUN: "8"  # most posts per check, so a backlog can't flood the channel
