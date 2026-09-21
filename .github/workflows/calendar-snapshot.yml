@@ -7,7 +7,7 @@ name: Calendar snapshot
 
 on:
   schedule:
-    - cron: "23 */4 * * *"  # every 4 hours
+    - cron: "23 */2 * * *"  # every 2 hours — GitHub drops scheduled runs, so give it plenty of chances
   workflow_dispatch:
 
 permissions:
