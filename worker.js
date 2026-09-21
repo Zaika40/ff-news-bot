@@ -442,8 +442,34 @@ export async function check(env, now = new Date()) {
     }
   }
 
+  const failures = report.filter((r) => r.error);
+  if (failures.length) state.lastError = { at: new Date().toISOString(), report: failures };
   if (JSON.stringify(state) !== before) await env.STATE.put(STATE_KEY, JSON.stringify(state));
   return report;
+}
+
+/** /debug — is the calendar feed reachable, and are the webhooks real? Posts nothing. */
+async function debugReport(env, state) {
+  const out = { lastError: state.lastError || null };
+  try {
+    const res = await fetch(CALENDAR_URL, { headers: { "User-Agent": FEED_UA } });
+    const body = await res.text();
+    out.calendarFeed = { status: res.status, bytes: body.length, looksLikeJson: body.trimStart().startsWith("["), sample: body.slice(0, 120) };
+  } catch (err) {
+    out.calendarFeed = { error: String(err).slice(0, 200) };
+  }
+  for (const name of ["CALENDAR_WEBHOOK", "DISCORD_WEBHOOK"]) {
+    const value = (env[name] || "").trim();
+    if (!value) { out[name] = "not set"; continue; }
+    try {
+      const res = await fetch(value, { headers: { "User-Agent": DISCORD_UA } }); // GET only reads the webhook
+      const info = await res.json().catch(() => ({}));
+      out[name] = { status: res.status, webhookName: info.name || null, channel: info.channel_id || null };
+    } catch (err) {
+      out[name] = { error: String(err).slice(0, 200) };
+    }
+  }
+  return out;
 }
 
 export default {
@@ -453,6 +479,9 @@ export default {
   async fetch(request, env) {
     const state = (await env.STATE.get(STATE_KEY, "json")) || {};
     const t = etNow();
+    if (new URL(request.url).pathname === "/debug") {
+      return new Response(JSON.stringify(await debugReport(env, state), null, 1), { headers: { "Content-Type": "application/json" } });
+    }
     return new Response(
       JSON.stringify(
         {
