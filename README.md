@@ -45,7 +45,22 @@ A second workflow checks two feeds every 5 minutes and posts anything new:
 
 Both feeds in one channel: make one webhook and add it as a single secret called `DISCORD_NEWS_WEBHOOK`. Posts still say which feed they came from. Want them split later? Add `DISCORD_TRUMP_WEBHOOK` and `DISCORD_HEADLINES_WEBHOOK` — each one takes over for its feed. With no secret at all, the watcher just skips. The first check posts a short "watching this" line and nothing else — the backlog stays quiet.
 
-Expect posts a few minutes behind real time: the Trump archive checks Truth Social every few minutes and GitHub runs the 5-minute schedule when it gets to it, so call it 5–15 minutes. Good for context, not for trading the headline. A $3/month relay like TweetShift gets that to about a minute if the lag starts costing you.
+Expect posts a few minutes behind real time: the Trump archive checks Truth Social every few minutes and GitHub runs the 5-minute schedule when it gets to it, so call it 5–15 minutes. Good for context, not for trading the headline.
+
+## The one-minute version (worker.js)
+
+`worker.js` is the same watcher as a Cloudflare Worker, which can run on a 1-minute cron for free. Once it's live, the GitHub `Feed watch` schedule comes off so nothing posts twice.
+
+What it needs in Cloudflare:
+
+| Setting | Value |
+|---|---|
+| KV binding | `STATE` → a namespace called `ff-news-state` |
+| Secret | `DISCORD_WEBHOOK` → your news channel webhook |
+| Cron trigger | `* * * * *` |
+| Optional secrets | `TRUMP_WEBHOOK`, `HEADLINES_WEBHOOK` to split the feeds into two channels |
+
+It only writes to KV when something new shows up, which keeps it inside the free plan's 1,000 writes a day. Opening the worker's URL shows a small status page: when each feed last had something new and how many post ids it remembers.
 
 ## Terminal shortcut (if you use the `gh` CLI)
 
