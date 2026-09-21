@@ -417,17 +417,39 @@ export async function loadCalendar() {
   return { events: JSON.parse(await getText(CALENDAR_URL)), source: "forexfactory" };
 }
 
-async function runCalendar(key, t, env) {
+const STALE_AFTER = 24 * 60 * 60 * 1000;
+
+async function runCalendar(key, t, env, now) {
   const webhook = (env.CALENDAR_WEBHOOK || "").trim();
   if (!webhook) return { calendar: key, skipped: "no CALENDAR_WEBHOOK" };
-  const events = parseEvents((await loadCalendar()).events);
-  const payload =
+  const calendar = await loadCalendar();
+  const events = parseEvents(calendar.events);
+  let payload =
     key === "morning" ? buildMorning(events, t.date)
     : key === "open" ? buildOpen(events, t.date, t.minutes)
     : buildWeek(events, t.date);
-  if (!payload) return { calendar: key, skipped: "week not published yet" }; // retried next minute
+
+  if (!payload) {
+    // The new week isn't in the snapshot yet. Keep quiet and retry, but say
+    // something rather than nothing on the last attempt.
+    const at = CALENDAR_POSTS.find((p) => p.key === key).at;
+    if (t.minutes - at < CATCH_UP_MINUTES - 5) return { calendar: key, skipped: "week not published yet" };
+    payload = {
+      embeds: [
+        calendarEmbed(`🗓️ ${CURRENCIES.join("/")} news · week ahead`, ["Forex Factory hasn't published next week's calendar yet. The daily 7:00 AM list still posts as normal."], []),
+      ],
+    };
+  }
+
+  // If the snapshot is a day or more old, say so under the post.
+  const age = calendar.fetched ? now.getTime() - Date.parse(calendar.fetched) : 0;
+  if (age > STALE_AFTER) {
+    const when = new Intl.DateTimeFormat("en-US", { timeZone: ET, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(calendar.fetched));
+    for (const embed of payload.embeds) embed.footer = { text: `${embed.footer.text} · calendar last refreshed ${when}` };
+  }
+
   await postToDiscord(webhook, { username: "FF News", ...payload });
-  return { calendar: key, posted: true };
+  return { calendar: key, posted: true, source: calendar.source };
 }
 
 // ---- the minute ------------------------------------------------------------
@@ -442,7 +464,7 @@ export async function check(env, now = new Date()) {
   const due = dueCalendarPost(t, state.calendar);
   if (due) {
     try {
-      const result = await runCalendar(due, t, env);
+      const result = await runCalendar(due, t, env, now);
       report.push(result);
       if (result.posted) state.calendar[due] = t.date;
     } catch (err) {
