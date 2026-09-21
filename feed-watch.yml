@@ -1,0 +1,39 @@
+name: Feed watch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # every 5 minutes; GitHub sometimes runs it a little later
+  workflow_dispatch:
+
+permissions:
+  contents: write  # so it can save what it has already posted
+
+concurrency:
+  group: feed-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the feeds
+        env:
+          DISCORD_TRUMP_WEBHOOK: ${{ secrets.DISCORD_TRUMP_WEBHOOK }}
+          DISCORD_HEADLINES_WEBHOOK: ${{ secrets.DISCORD_HEADLINES_WEBHOOK }}
+          MAX_PER_RUN: "8"  # most posts per check, so a backlog can't flood the channel
+        run: python3 feed_watch.py
+
+      - name: Remember what it posted
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain state)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state
+            git commit -m "state: feeds [skip ci]"
+            git pull --rebase --autostash
+            git push
+          fi

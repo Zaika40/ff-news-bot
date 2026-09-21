@@ -34,6 +34,19 @@ Go to the Actions tab, pick **FF News** on the left, click **Run workflow**, cho
 
 After that it runs on its own. If a run ever fails, GitHub emails you.
 
+## The live feeds (feed_watch.py)
+
+A second workflow checks two feeds every 5 minutes and posts anything new:
+
+| Feed | What lands | Webhook secret |
+|---|---|---|
+| Trump · Truth Social | every post, from the trumpstruth.org archive | `DISCORD_TRUMP_WEBHOOK` |
+| InvestingLive | macro headlines: Fed, Treasury, tariffs, data reactions | `DISCORD_HEADLINES_WEBHOOK` |
+
+Give each one its own channel, make a webhook in each, and add the two secrets the same way as in step 5. A feed with no secret set is skipped, so you can turn one on now and the other later. The first check posts a short "watching this" line and nothing else — the backlog stays quiet.
+
+Expect posts a few minutes behind real time: the Trump archive checks Truth Social every few minutes and GitHub runs the 5-minute schedule when it gets to it, so call it 5–15 minutes. Good for context, not for trading the headline. A $3/month relay like TweetShift gets that to about a minute if the lag starts costing you.
+
 ## Terminal shortcut (if you use the `gh` CLI)
 
 ```bash
