@@ -174,7 +174,8 @@ def save_state(state: dict) -> None:
 
 
 def run_feed(feed: dict, state: dict, dry_run: bool) -> int:
-    webhook = os.getenv(feed["webhook_env"], "").strip()
+    # its own channel if you gave it one, otherwise the shared news channel
+    webhook = os.getenv(feed["webhook_env"], "").strip() or os.getenv("DISCORD_NEWS_WEBHOOK", "").strip()
     if not webhook and not dry_run:
         log(f"{feed['name']}: no {feed['webhook_env']} secret set — skipping")
         return 0
