@@ -1,17 +1,10 @@
 name: FF News
 
+# The Cloudflare worker (worker.js) sends these posts now — it runs every minute,
+# so 7:00 and 9:30 land on time. GitHub's scheduler dropped runs, which is why
+# the schedule here is off. Run it by hand from the Actions tab if the worker
+# is ever down.
 on:
-  schedule:
-    # GitHub runs cron on UTC, so each post has one line for summer time (EDT)
-    # and one for winter time (EST). The script skips whichever line doesn't
-    # match today's clock, starts 10 min early and waits for the exact time.
-    # If you change these, update SCHEDULES in ff_news.py to match.
-    - cron: "50 10 * * 1-5"  # weekdays 7:00 AM ET, today's news (EDT)
-    - cron: "50 11 * * 1-5"  # weekdays 7:00 AM ET, today's news (EST)
-    - cron: "20 13 * * 1-5"  # weekdays 9:30 AM ET, NY open ping (EDT)
-    - cron: "20 14 * * 1-5"  # weekdays 9:30 AM ET, NY open ping (EST)
-    - cron: "50 20 * * 0"    # Sundays 5:00 PM ET, week ahead (EDT)
-    - cron: "50 21 * * 0"    # Sundays 5:00 PM ET, week ahead (EST)
   workflow_dispatch:
     inputs:
       post:
