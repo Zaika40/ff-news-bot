@@ -1,94 +1,67 @@
 # FF News bot
 
-Posts Forex Factory's USD red and orange folder news to your Discord channel. All times are ET.
+Posts Forex Factory's USD red and orange folder news to your calendar channel, plus Trump's Truth Social posts and macro headlines to your news channel. All times are ET.
 
-| When | What it posts |
-|---|---|
-| Weekdays 7:00 AM | Today's news, split into before the open, your 9:30–11:00 session, and later, plus what ran overnight in Asia and Europe |
-| Weekdays 9:30 AM | What's still ahead today, with an @everyone ping (no ping if nothing's left) |
-| Sundays 5:00 PM | The week ahead, day by day |
+| When | Channel | What it posts |
+|---|---|---|
+| Weekdays 7:00 AM | calendar | Today's news, split into before the open, your 9:30–11:00 session, and later, plus what ran overnight in Asia and Europe |
+| Weekdays 9:30 AM | calendar | What's still ahead today, with an @everyone ping (no ping if nothing's left) |
+| Sundays 5:00 PM | calendar | The week ahead, day by day |
+| Weekdays 7:00 AM – noon | news | Trump posts and macro headlines, live, within a minute or two |
+| Sundays 6–10 PM | news | Same, for the futures open |
+| Everything else | — | Muted. New items are held and arrive as one catch-up list when the next window opens |
 
 Fed and Treasury speakers are always included, even when Forex Factory tags them low impact.
 
-It runs free on GitHub, so your computer doesn't need to be on.
+All of it runs on a Cloudflare Worker (`worker.js`) that fires every minute, so your computer doesn't need to be on.
 
-## Setup (about 10 minutes)
+## How it's wired
 
-**1. Make a Discord webhook**
-In your server, hover over the channel and click the gear (Edit Channel). Then go to Integrations → Webhooks → New Webhook, click the new webhook and hit **Copy Webhook URL**.
-
-**2. Make a GitHub repo**
-Go to github.com/new, name it `ff-news-bot`, pick **Public** and click Create repository. Public keeps the Actions minutes free, and nothing secret lives in the repo — the webhook goes in as a secret in step 5.
-
-**3. Add the script**
-On the new repo page, click **uploading an existing file**, drag in `ff_news.py`, then click Commit changes.
-
-**4. Add the schedule**
-Click Add file → **Create new file**. In the name box, type `.github/workflows/ff-news.yml` (each `/` makes a folder). Paste in everything from `ff-news.yml`, then click Commit changes.
-
-**5. Add the webhook as a secret**
-Go to Settings → Secrets and variables → Actions → **New repository secret**. Set the name to `DISCORD_WEBHOOK_URL`, paste the webhook URL as the secret, and click Add secret.
-
-**6. Test it**
-Go to the Actions tab, pick **FF News** on the left, click **Run workflow**, choose `week` and click Run. The post should show up in your channel within about a minute.
-
-After that it runs on its own. If a run ever fails, GitHub emails you.
-
-## The live feeds (feed_watch.py)
-
-A second workflow checks two feeds every 5 minutes and posts anything new:
-
-| Feed | What lands | Webhook secret |
-|---|---|---|
-| Trump · Truth Social | every post, from the trumpstruth.org archive | `DISCORD_TRUMP_WEBHOOK` |
-| InvestingLive | macro headlines: Fed, Treasury, tariffs, data reactions | `DISCORD_HEADLINES_WEBHOOK` |
-
-Both feeds in one channel: make one webhook and add it as a single secret called `DISCORD_NEWS_WEBHOOK`. Posts still say which feed they came from. Want them split later? Add `DISCORD_TRUMP_WEBHOOK` and `DISCORD_HEADLINES_WEBHOOK` — each one takes over for its feed. With no secret at all, the watcher just skips. The first check posts a short "watching this" line and nothing else — the backlog stays quiet.
-
-Expect posts a few minutes behind real time: the Trump archive checks Truth Social every few minutes and GitHub runs the 5-minute schedule when it gets to it, so call it 5–15 minutes. Good for context, not for trading the headline.
-
-## The one-minute version (worker.js)
-
-`worker.js` is the same watcher as a Cloudflare Worker, which can run on a 1-minute cron for free. Once it's live, the GitHub `Feed watch` schedule comes off so nothing posts twice.
-
-What it needs in Cloudflare:
-
-| Setting | Value |
+| Piece | Where |
 |---|---|
-| KV binding | `STATE` → a namespace called `ff-news-state` |
-| Secret | `DISCORD_WEBHOOK` → your news channel webhook |
-| Cron trigger | `* * * * *` |
-| Optional secrets | `TRUMP_WEBHOOK`, `HEADLINES_WEBHOOK` to split the feeds into two channels |
+| `worker.js` | the whole bot — calendar posts and live feeds |
+| `wrangler.toml` | worker config: the every-minute cron and the KV namespace |
+| Cloudflare secrets | `CALENDAR_WEBHOOK` (calendar channel), `DISCORD_WEBHOOK` (news channel) |
+| Optional secrets | `TRUMP_WEBHOOK`, `HEADLINES_WEBHOOK` to split the two feeds into separate channels |
+| KV `STATE` | what it has already posted, and anything held during muted hours |
+| GitHub Actions | manual backup only. `ff_news.py` and `feed_watch.py` still work from the Actions tab, on the `DISCORD_WEBHOOK_URL` and `DISCORD_NEWS_WEBHOOK` secrets in this repo |
 
-It only writes to KV when something new shows up, which keeps it inside the free plan's 1,000 writes a day. Opening the worker's URL shows a small status page: when each feed last had something new and how many post ids it remembers.
-
-## Terminal shortcut (if you use the `gh` CLI)
-
-```bash
-gh repo create ff-news-bot --private --clone && cd ff-news-bot
-mkdir -p .github/workflows
-cp /path/to/ff_news.py . && cp /path/to/ff-news.yml .github/workflows/
-git add . && git commit -m "FF news bot" && git push -u origin HEAD
-gh secret set DISCORD_WEBHOOK_URL        # paste the URL when asked
-gh workflow run "FF News" -f post=week
-```
+Pushing to `main` redeploys the worker automatically.
 
 ## Changing it
 
-Edit the `env:` block at the bottom of `.github/workflows/ff-news.yml`:
+Edit the settings block at the top of `worker.js`:
 
-- `CURRENCIES`: `"USD"`, or something like `"USD,EUR"`
-- `IMPACTS`: `"High"` for red only, `"High,Medium"` for red and orange
-- `SESSION`: your trading window, used to split the morning list
-- `OPEN_PING`: who the 9:30 post pings. Use `""` for no ping, or `"<@YOUR_USER_ID>"` to ping just you
-- `SPEAKERS`: title words that get included whatever the folder color (Fed and Treasury talks)
-- `GLOBAL_IMPACTS`: what counts for the overnight block from other currencies. `""` drops the block
-- `OVERNIGHT_FROM`: when the overnight block starts the evening before
-
-To change the post times, edit the cron lines **and** the matching `SCHEDULES` table in `ff_news.py`. GitHub cron runs on UTC, so each time has one line for summer (EDT) and one for winter (EST).
+- `LIVE_WINDOWS` — when the feeds are allowed to post
+- `CALENDAR_POSTS` — the times of the three calendar posts
+- `CURRENCIES` / `IMPACTS` — which events make the cut
+- `SPEAKERS` — title words that get in whatever the folder color
+- `GLOBAL_IMPACTS` — what counts for the overnight block
+- `SESSION` — your trading window, used to split the morning list
+- `OPEN_PING` — who the 9:30 post pings. `""` for no ping, `"<@YOUR_USER_ID>"` to ping just you
 
 ## Good to know
 
-- GitHub sometimes starts scheduled runs a few minutes late. To stay on time, the bot starts 10 minutes early and waits.
-- The runs use about 600 of the 2,000 free GitHub Actions minutes a month that private repos get.
 - The Forex Factory feed has no "actual" numbers, only forecast and previous.
+- If a calendar post fails (feed down, rate limited), the worker retries every 5 minutes for half an hour, then gives up until the next scheduled post.
+- Trump posts land 1–3 minutes late. The floor isn't the worker, it's the trumpstruth.org archive checking Truth Social every few minutes.
+- Opening the worker's URL shows a status page: Eastern time, whether it's live or muted, what it's posted today, and how many items are held.
+
+## The GitHub backup
+
+Before the worker, this ran on GitHub Actions. Those workflows are still here with their schedules switched off, so you can fire either one by hand from the **Actions** tab if Cloudflare ever goes quiet:
+
+| Workflow | Run it with | Uses secret |
+|---|---|---|
+| FF News | `morning`, `open` or `week` | `DISCORD_WEBHOOK_URL` (calendar channel) |
+| Feed watch | no input | `DISCORD_NEWS_WEBHOOK` (news channel) |
+
+Those two repo secrets are separate from the Cloudflare ones — same webhooks, stored twice.
+
+`ff_news.py` and `feed_watch.py` are the Python versions of what the worker does. They read their settings from the `env:` block in each workflow file.
+
+## If you ever need to rebuild it
+
+1. Discord: a webhook in the calendar channel and one in the news channel (channel gear → Integrations → Webhooks → New Webhook → Copy Webhook URL).
+2. Cloudflare: a Worker deployed from this repo, a KV namespace bound as `STATE`, the two webhook secrets, and a `* * * * *` cron trigger. `wrangler.toml` carries the cron and the KV id.
+3. Push to `main` — the worker redeploys itself.
