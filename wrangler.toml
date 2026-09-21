@@ -1,0 +1,12 @@
+# Cloudflare Worker config — deploys worker.js, the 1-minute feed watcher.
+# The Discord webhooks are secrets, set in the Cloudflare dashboard, not here.
+name = "ff-news-watcher"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "95ca032c237d45fa9e75b9381d060aac"
