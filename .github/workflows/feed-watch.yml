@@ -1,8 +1,9 @@
 name: Feed watch
 
+# The Cloudflare worker (worker.js) watches these feeds every minute now, so the
+# 5-minute schedule here is off to stop double posts. Run it by hand from the
+# Actions tab if the worker is ever down.
 on:
-  schedule:
-    - cron: "*/5 * * * *"  # every 5 minutes; GitHub sometimes runs it a little later
   workflow_dispatch:
 
 permissions:
