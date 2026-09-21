@@ -64,6 +64,10 @@ const REMEMBER = 120; // post ids remembered per feed
 const MAX_ITEMS = 25; // newest items parsed per feed
 
 // ---- calendar --------------------------------------------------------------
+// Forex Factory rate limits by IP and Cloudflare's shared addresses are always
+// over the line (429 every time), so the calendar comes from the snapshot that
+// the GitHub workflow commits. The direct feed stays as a fallback.
+const CALENDAR_SNAPSHOT = "https://raw.githubusercontent.com/Zaika40/ff-news-bot/main/data/calendar.json";
 const CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
 const CURRENCIES = ["USD"];
 const IMPACTS = ["High", "Medium"];
@@ -401,10 +405,22 @@ export function buildWeek(events, sunday) {
   return { embeds: [calendarEmbed(`🗓️ ${CURRENCIES.join("/")} news · week of ${mon} ${day}`, lines, shown)] };
 }
 
+export async function loadCalendar() {
+  try {
+    const snapshot = JSON.parse(await getText(CALENDAR_SNAPSHOT));
+    if (Array.isArray(snapshot.events) && snapshot.events.length) {
+      return { events: snapshot.events, source: "snapshot", fetched: snapshot.fetched };
+    }
+  } catch {
+    // snapshot missing or malformed — try Forex Factory directly
+  }
+  return { events: JSON.parse(await getText(CALENDAR_URL)), source: "forexfactory" };
+}
+
 async function runCalendar(key, t, env) {
   const webhook = (env.CALENDAR_WEBHOOK || "").trim();
   if (!webhook) return { calendar: key, skipped: "no CALENDAR_WEBHOOK" };
-  const events = parseEvents(JSON.parse(await getText(CALENDAR_URL)));
+  const events = parseEvents((await loadCalendar()).events);
   const payload =
     key === "morning" ? buildMorning(events, t.date)
     : key === "open" ? buildOpen(events, t.date, t.minutes)
@@ -452,11 +468,10 @@ export async function check(env, now = new Date()) {
 async function debugReport(env, state) {
   const out = { lastError: state.lastError || null };
   try {
-    const res = await fetch(CALENDAR_URL, { headers: { "User-Agent": FEED_UA } });
-    const body = await res.text();
-    out.calendarFeed = { status: res.status, bytes: body.length, looksLikeJson: body.trimStart().startsWith("["), sample: body.slice(0, 120) };
+    const { events, source, fetched } = await loadCalendar();
+    out.calendar = { source, fetched: fetched || null, events: events.length, first: events[0] ? events[0].title : null };
   } catch (err) {
-    out.calendarFeed = { error: String(err).slice(0, 200) };
+    out.calendar = { error: String(err).slice(0, 200) };
   }
   for (const name of ["CALENDAR_WEBHOOK", "DISCORD_WEBHOOK"]) {
     const value = (env[name] || "").trim();

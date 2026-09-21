@@ -21,6 +21,7 @@ All of it runs on a Cloudflare Worker (`worker.js`) that fires every minute, so 
 |---|---|
 | `worker.js` | the whole bot — calendar posts and live feeds |
 | `wrangler.toml` | worker config: the every-minute cron and the KV namespace |
+| `snapshot_calendar.py` | GitHub Action, every 4 hours: saves the Forex Factory week into `data/calendar.json` |
 | Cloudflare secrets | `CALENDAR_WEBHOOK` (calendar channel), `DISCORD_WEBHOOK` (news channel) |
 | Optional secrets | `TRUMP_WEBHOOK`, `HEADLINES_WEBHOOK` to split the two feeds into separate channels |
 | KV `STATE` | what it has already posted, and anything held during muted hours |
@@ -42,7 +43,9 @@ Edit the settings block at the top of `worker.js`:
 
 ## Good to know
 
+- Forex Factory rate limits by IP, and Cloudflare's shared addresses are always over the line — the worker gets a 429 every time it asks. That's why the calendar comes from `data/calendar.json`, which a GitHub Action refreshes every 4 hours. The feed covers a full week, so a missed refresh costs nothing.
 - The Forex Factory feed has no "actual" numbers, only forecast and previous.
+- `/debug` on the worker URL shows whether the calendar loaded, which source it came from, and the last error it hit. It posts nothing.
 - If a calendar post fails (feed down, rate limited), the worker retries every 5 minutes for half an hour, then gives up until the next scheduled post.
 - Trump posts land 1–3 minutes late. The floor isn't the worker, it's the trumpstruth.org archive checking Truth Social every few minutes.
 - Opening the worker's URL shows a status page: Eastern time, whether it's live or muted, what it's posted today, and how many items are held.
